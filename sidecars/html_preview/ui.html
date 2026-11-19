@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Preview</title>
+  <script src="/preload.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--background, #18181b);
+      color: var(--foreground, #f4f4f5);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 13px;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--card, #202024);
+      border-bottom: 1px solid var(--border, #2e2e34);
+    }
+
+    .seg {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: 8px;
+      background: var(--background, #18181b);
+      border: 1px solid var(--border, #2e2e34);
+      flex-shrink: 0;
+    }
+
+    .seg button {
+      border: 0;
+      background: transparent;
+      color: var(--muted-foreground, #a1a1aa);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .seg button.active {
+      background: var(--primary, #2563eb);
+      color: var(--primary-foreground, #ffffff);
+    }
+
+    .path-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .path-input {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #2e2e34);
+      background: var(--background, #18181b);
+      color: var(--foreground, #f4f4f5);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .path-input:focus {
+      outline: none;
+      border-color: var(--primary, #2563eb);
+    }
+
+    .btn {
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #2e2e34);
+      background: var(--secondary, #27272a);
+      color: var(--secondary-foreground, #e4e4e7);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn:hover { opacity: 0.9; }
+
+    .file-select {
+      max-width: 200px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border, #2e2e34);
+      background: var(--background, #18181b);
+      color: var(--foreground, #f4f4f5);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .content {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .preview-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #ffffff;
+    }
+
+    .code-pane {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background: var(--background, #18181b);
+      padding: 10px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .code-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .code-line-num {
+      width: 48px;
+      padding: 0 12px 0 8px;
+      text-align: right;
+      color: var(--muted-foreground, #71717a);
+      user-select: none;
+      vertical-align: top;
+      border-right: 1px solid var(--border, #2e2e34);
+    }
+
+    .code-line-text {
+      padding: 0 14px;
+      white-space: pre;
+      color: var(--foreground, #f4f4f5);
+      tab-size: 2;
+    }
+
+    .empty-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted-foreground, #a1a1aa);
+    }
+
+    .empty-state h3 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--foreground, #f4f4f5);
+    }
+
+    .error-banner {
+      padding: 8px 12px;
+      font-size: 12px;
+      background: rgba(220, 38, 38, 0.14);
+      color: #fca5a5;
+      border-bottom: 1px solid rgba(220, 38, 38, 0.35);
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="seg" role="tablist" aria-label="视图模式">
+        <button id="btn-preview" type="button" class="active">预览</button>
+        <button id="btn-code" type="button">代码</button>
+      </div>
+
+      <select id="recent-select" class="file-select" title="最近 / 工作区 HTML 文件">
+        <option value="">选择 HTML 文件...</option>
+      </select>
+
+      <form id="open-form" class="path-bar">
+        <input id="path-input" class="path-input" type="text" placeholder="输入或粘贴本地 .html 文件路径..." />
+        <button type="submit" class="btn">打开</button>
+      </form>
+
+      <button id="btn-refresh" type="button" class="btn">刷新</button>
+      <button id="btn-copy" type="button" class="btn">复制代码</button>
+    </header>
+
+    <div id="error-banner" class="error-banner hidden"></div>
+
+    <main class="content">
+      <div id="empty-state" class="empty-state">
+        <h3>尚未加载 HTML 文件</h3>
+        <div>点击工作区中的 <code>.html</code> 文件、从上方下拉框选择，或粘贴本地 HTML 文件路径后点击「打开」。</div>
+      </div>
+      <iframe id="preview-frame" class="preview-frame hidden" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"></iframe>
+      <div id="code-pane" class="code-pane hidden">
+        <table class="code-table"><tbody id="code-tbody"></tbody></table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      mode: 'preview',
+      filePath: '',
+      content: '',
+      workspaceUris: [],
+    };
+
+    const els = {
+      btnPreview: document.getElementById('btn-preview'),
+      btnCode: document.getElementById('btn-code'),
+      recentSelect: document.getElementById('recent-select'),
+      openForm: document.getElementById('open-form'),
+      pathInput: document.getElementById('path-input'),
+      btnRefresh: document.getElementById('btn-refresh'),
+      btnCopy: document.getElementById('btn-copy'),
+      errorBanner: document.getElementById('error-banner'),
+      emptyState: document.getElementById('empty-state'),
+      previewFrame: document.getElementById('preview-frame'),
+      codePane: document.getElementById('code-pane'),
+      codeTbody: document.getElementById('code-tbody'),
+    };
+
+    function showError(msg) {
+      if (!msg) {
+        els.errorBanner.classList.add('hidden');
+        els.errorBanner.textContent = '';
+        return;
+      }
+      els.errorBanner.textContent = msg;
+      els.errorBanner.classList.remove('hidden');
+    }
+
+    function updateView() {
+      const isPreview = state.mode === 'preview';
+      els.btnPreview.classList.toggle('active', isPreview);
+      els.btnCode.classList.toggle('active', !isPreview);
+
+      if (!state.filePath) {
+        els.emptyState.classList.remove('hidden');
+        els.previewFrame.classList.add('hidden');
+        els.codePane.classList.add('hidden');
+        return;
+      }
+
+      els.emptyState.classList.add('hidden');
+      els.previewFrame.classList.toggle('hidden', !isPreview);
+      els.codePane.classList.toggle('hidden', isPreview);
+    }
+
+    function renderCode(source) {
+      els.codeTbody.replaceChildren();
+      const lines = String(source ?? '').replace(/\r\n?/g, '\n').split('\n');
+      const frag = document.createDocumentFragment();
+      lines.forEach((line, idx) => {
+        const tr = document.createElement('tr');
+        const tdNum = document.createElement('td');
+        tdNum.className = 'code-line-num';
+        tdNum.textContent = String(idx + 1);
+
+        const tdCode = document.createElement('td');
+        tdCode.className = 'code-line-text';
+        tdCode.textContent = line;
+
+        tr.append(tdNum, tdCode);
+        frag.append(tr);
+      });
+      els.codeTbody.append(frag);
+    }
+
+    async function apiPost(url, payload) {
+      const fetcher = window.sidecar?.fetch || fetch;
+      const res = await fetcher(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function openFile(filePath) {
+      const target = String(filePath || '').trim();
+      if (!target) return;
+      showError('');
+      try {
+        const data = await apiPost('/api/open', {
+          file: target,
+          workspaceUris: state.workspaceUris,
+        });
+        state.filePath = data.filePath;
+        state.content = data.content;
+        els.pathInput.value = data.filePath;
+        els.previewFrame.srcdoc = data.content;
+        renderCode(data.content);
+        updateView();
+      } catch (err) {
+        showError(`打开失败：${err.message}`);
+      }
+    }
+
+    async function refreshRecentFiles() {
+      try {
+        const data = await apiPost('/api/list', { workspaceUris: state.workspaceUris });
+        const files = Array.isArray(data.files) ? data.files : [];
+        els.recentSelect.innerHTML = '<option value="">选择 HTML 文件...</option>';
+        files.forEach((f) => {
+          const opt = document.createElement('option');
+          opt.value = f.filePath;
+          opt.textContent = `[${f.source}] ${f.fileName}`;
+          els.recentSelect.append(opt);
+        });
+        if (!state.filePath && files.length > 0) {
+          await openFile(files[0].filePath);
+          els.recentSelect.value = files[0].filePath;
+        }
+      } catch {
+        // ignore list errors silently
+      }
+    }
+
+    els.btnPreview.addEventListener('click', () => {
+      state.mode = 'preview';
+      updateView();
+    });
+
+    els.btnCode.addEventListener('click', () => {
+      state.mode = 'code';
+      updateView();
+    });
+
+    els.openForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      openFile(els.pathInput.value);
+    });
+
+    els.recentSelect.addEventListener('change', (e) => {
+      if (e.target.value) {
+        openFile(e.target.value);
+      }
+    });
+
+    els.btnRefresh.addEventListener('click', () => {
+      if (state.filePath) {
+        openFile(state.filePath);
+      } else {
+        refreshRecentFiles();
+      }
+    });
+
+    els.btnCopy.addEventListener('click', async () => {
+      if (!state.content) return;
+      try {
+        await navigator.clipboard.writeText(state.content);
+        const orig = els.btnCopy.textContent;
+        els.btnCopy.textContent = '已复制';
+        setTimeout(() => { els.btnCopy.textContent = orig; }, 1200);
+      } catch {
+        showError('无法写入剪贴板，请手动全选复制。');
+      }
+    });
+
+    async function init() {
+      if (window.sidecar?.getWorkspaceUris) {
+        state.workspaceUris = await window.sidecar.getWorkspaceUris();
+        window.sidecar.onWorkspaceChange?.((uris) => {
+          state.workspaceUris = uris;
+          refreshRecentFiles();
+        });
+      }
+
+      const initialFile = new URLSearchParams(window.location.search).get('file');
+      if (initialFile) {
+        await openFile(initialFile);
+      }
+      await refreshRecentFiles();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "html-preview",
+  "displayName": "HTML Preview",
+  "version": "1.0.0",
+  "description": "Open and inspect local HTML files in the side pane with instant switching between live preview (default) and source code.",
+  "logo": "assets/logo.svg",
+  "author": "pika-66",
+  "homepage": "https://github.com/pika-66/antigravity-html-preview",
+  "repository": "https://github.com/pika-66/antigravity-html-preview"
+}
